@@ -2,6 +2,7 @@
 *.d
 main
 
+.cache
 .direnv
 result
 
