@@ -19,8 +19,11 @@ CPPFLAGS ?= $(INC_FLAGS) -MMD -MP
 $(TARGET): $(OBJS)
 	$(CXX) $(LDFLAGS) $(OBJS) -o $@ $(LOADLIBES) $(LDLIBS)
 
-.PHONY: clean
+.PHONY: clean run
 clean:
 	$(RM) $(TARGET) $(OBJS) $(DEPS)
+
+run: $(TARGET)
+	./$(TARGET) ./testcases/case00.in out
 
 -include $(DEPS)
