@@ -4,7 +4,7 @@ RM ?= rm
 CXX ?= g++
 CXXFLAGS ?= -O3 -g -Wall
 
-TARGET ?= main
+TARGET ?= pa1
 SRC_DIRS ?= ./src
 
 SRCS := $(shell find $(SRC_DIRS) -name *.cpp)

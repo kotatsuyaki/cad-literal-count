@@ -22,7 +22,7 @@
           buildInputs = deps;
           installPhase = ''
             mkdir -p $out/bin
-            cp main $out/bin/cad-pa-1
+            cp pa1 $out/bin/cad-pa-1
           '';
         };
       in
