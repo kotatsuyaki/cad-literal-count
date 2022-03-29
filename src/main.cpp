@@ -5,6 +5,7 @@
 #include <iostream>
 #include <istream>
 #include <iterator>
+#include <optional>
 #include <ostream>
 #include <vector>
 
@@ -66,6 +67,7 @@ struct Implicant {
 
 std::ostream& operator<<(std::ostream& os, const Implicant& imp) {
     os << "Implicant(";
+    os << imp.num_pos_lits() << ", ";
     for (auto value : imp.values) {
         if (value == DC) {
             os << "-";
@@ -125,6 +127,30 @@ int main(int argc, char** argv) {
     }
 
     // TODO: find primary implicants
+    bool done = false;
+    // index of start of this section (inclusive)
+    size_t section_start = 0;
+    while (done == false) {
+        // index of end of this section (non-inclusive)
+        size_t section_end = table.size();
+        std::vector<size_t> part_start_indexes{};
+
+        std::optional<size_t> last_num_pos_lits = std::nullopt;
+        for (size_t i = section_start; i < section_end; i += 1) {
+            size_t num_pos_lits = table[i].first.num_pos_lits();
+
+            if (num_pos_lits != last_num_pos_lits) {
+                part_start_indexes.push_back(i);
+                last_num_pos_lits = num_pos_lits;
+            }
+        }
+
+        std::cerr << "\nPart start indexes:\n";
+        dbg(part_start_indexes);
+
+        section_start = section_end;
+        break;
+    }
 
     return 0;
 }
