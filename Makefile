@@ -2,7 +2,7 @@
 
 RM ?= rm
 CXX ?= g++
-CXXFLAGS ?= -O3 -g -Wall
+CXXFLAGS ?= -O3 -g -Wall -std=c++17
 
 TARGET ?= pa1
 SRC_DIRS ?= ./src
