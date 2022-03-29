@@ -4,6 +4,8 @@
 #include <fstream>
 #include <iostream>
 #include <istream>
+#include <iterator>
+#include <ostream>
 #include <vector>
 
 #include "dbg.h"
@@ -45,18 +47,6 @@ struct Implicant {
         return Implicant(values);
     }
 
-    void dbg_print() const {
-        std::cerr << "Implicant(";
-        for (auto value : values) {
-            if (value == DC) {
-                std::cerr << "-";
-            } else {
-                std::cerr << static_cast<int>(value);
-            }
-        }
-        std::cerr << ")\n";
-    }
-
     // Returns the number of positive literals
     size_t num_pos_lits() const {
         return std::count_if(values.begin(), values.end(),
@@ -70,7 +60,22 @@ struct Implicant {
 
     // Defaults to comparing the underlying literal values
     bool operator==(const Implicant& imp) const { return values == imp.values; }
+
+    friend std::ostream& operator<<(std::ostream& os, const Implicant& imp);
 };
+
+std::ostream& operator<<(std::ostream& os, const Implicant& imp) {
+    os << "Implicant(";
+    for (auto value : imp.values) {
+        if (value == DC) {
+            os << "-";
+        } else {
+            os << static_cast<int>(value);
+        }
+    }
+    os << ")";
+    return os;
+}
 
 int main(int argc, char** argv) {
     assert(argc == 3);
@@ -89,13 +94,13 @@ int main(int argc, char** argv) {
     std::vector<Implicant> implicants{};
     for (int term = 0; term < nterms; term += 1) {
         auto imp = Implicant::read_from(infile, nvars);
-        imp.dbg_print();
+        std::cerr << imp << "\n";
         implicants.push_back(imp);
     }
 
     std::cerr << "\nUnsorted implicants:\n";
     for (auto imp : implicants) {
-        imp.dbg_print();
+        std::cerr << imp << "\n";
     }
 
     // Sort initial implicants
@@ -103,12 +108,23 @@ int main(int argc, char** argv) {
 
     std::cerr << "\nSorted implicants:\n";
     for (auto imp : implicants) {
-        imp.dbg_print();
+        std::cerr << imp << "\n";
+    }
+
+    // (implicant, removed?) pairs
+    std::vector<std::pair<Implicant, bool>> table;
+
+    // Insert initial implicants into the table
+    std::transform(implicants.begin(), implicants.end(),
+                   std::back_inserter(table),
+                   [](Implicant imp) { return std::make_pair(imp, false); });
+
+    std::cerr << "\nMarked implicants:\n";
+    for (auto [imp, removed] : table) {
+        std::cerr << (removed ? "(X) " : "(O) ") << imp << "\n";
     }
 
     // TODO: find primary implicants
-    std::vector<std::vector<Implicant>> table;
-    table.push_back(implicants);
 
     return 0;
 }
