@@ -71,8 +71,16 @@ struct MarkedImplicant {
     MarkedImplicant(Implicant imp) : imp(imp) {}
     void mark_reduced() { reduced = true; }
 
+    // Compare the contained 'Implicant' and ignore reduced flag
+    bool operator<(const MarkedImplicant& mimp) const { return imp < mimp.imp; }
+
+    // Compare the contained 'Implicant' and ignore reduced flag
+    bool operator==(const MarkedImplicant& mimp) const {
+        return imp == mimp.imp;
+    }
+
     friend std::ostream& operator<<(std::ostream& os,
-                                    const MarkedImplicant& imp);
+                                    const MarkedImplicant& mimp);
 };
 
 std::ostream& operator<<(std::ostream& os, const Implicant& imp) {
@@ -98,7 +106,34 @@ std::ostream& operator<<(std::ostream& os, const MarkedImplicant& mimp) {
 }
 
 std::optional<Implicant> try_reduce(Implicant a, Implicant b) {
-    return std::nullopt;
+    size_t nvars = a.values.size();
+    size_t num_diff = 0;
+    size_t diff_index = 0;
+
+    // Find number of different variables
+    for (size_t i = 0; i < nvars; i += 1) {
+        if (a.values[i] != b.values[i]) {
+            num_diff += 1;
+            diff_index = i;
+
+            // Early return if there's too many differences
+            if (num_diff > 1) {
+                return std::nullopt;
+            }
+        }
+    }
+
+    if (num_diff == 0) {
+        assert(false);
+    } else if (num_diff == 1) {
+        // Return new implicant with variable at the only one different place
+        // set as don't care
+        Implicant imp = a;
+        imp.values[diff_index] = DC;
+        return imp;
+    } else {
+        assert(false);
+    }
 }
 
 // Get starting indexes of each consecutive part of the table, by their pos lit
@@ -219,6 +254,11 @@ int main(int argc, char** argv) {
             }
         }
 
+        // Sort and dedup the new section
+        std::sort(table.begin() + section_end, table.end());
+        table.erase(std::unique(table.begin() + section_end, table.end()),
+                    table.end());
+
         // Update starting point of the next section
         section_start = section_end;
 
@@ -227,6 +267,12 @@ int main(int argc, char** argv) {
             std::cerr << "No progress, breaking the loop\n";
             break;
         }
+    }
+
+    std::cerr << "\nPrimary implicants in table:\n";
+    for (auto marked_imp : table) {
+        if (marked_imp.reduced == false)
+            dbg(marked_imp);
     }
 
     return 0;
