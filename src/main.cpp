@@ -65,6 +65,16 @@ struct Implicant {
     friend std::ostream& operator<<(std::ostream& os, const Implicant& imp);
 };
 
+struct MarkedImplicant {
+    Implicant imp;
+    bool reduced = false;
+    MarkedImplicant(Implicant imp) : imp(imp) {}
+    void mark_reduced() { reduced = true; }
+
+    friend std::ostream& operator<<(std::ostream& os,
+                                    const MarkedImplicant& imp);
+};
+
 std::ostream& operator<<(std::ostream& os, const Implicant& imp) {
     os << "Implicant(";
     os << imp.num_pos_lits() << ", ";
@@ -77,6 +87,38 @@ std::ostream& operator<<(std::ostream& os, const Implicant& imp) {
     }
     os << ")";
     return os;
+}
+
+std::ostream& operator<<(std::ostream& os, const MarkedImplicant& mimp) {
+    os << "MarkedImplicant(";
+    os << (mimp.reduced ? "_, " : "O, ");
+    os << mimp.imp;
+    os << ")";
+    return os;
+}
+
+std::optional<Implicant> try_reduce(Implicant a, Implicant b) {
+    return std::nullopt;
+}
+
+// Get starting indexes of each consecutive part of the table, by their pos lit
+// counts
+std::vector<size_t> get_part_start_indexes(std::vector<MarkedImplicant>& table,
+                                           size_t section_start,
+                                           size_t section_end) {
+    std::vector<size_t> part_start_indexes{};
+
+    std::optional<size_t> last_num_pos_lits = std::nullopt;
+    for (size_t i = section_start; i < section_end; i += 1) {
+        size_t num_pos_lits = table[i].imp.num_pos_lits();
+
+        if (num_pos_lits != last_num_pos_lits) {
+            part_start_indexes.push_back(i);
+            last_num_pos_lits = num_pos_lits;
+        }
+    }
+
+    return part_start_indexes;
 }
 
 int main(int argc, char** argv) {
@@ -113,13 +155,13 @@ int main(int argc, char** argv) {
         std::cerr << imp << "\n";
     }
 
-    // (implicant, removed?) pairs
-    std::vector<std::pair<Implicant, bool>> table;
+    // Implicants, along with marker of whether it's been reduced or not
+    std::vector<MarkedImplicant> table;
 
     // Insert initial implicants into the table
     std::transform(implicants.begin(), implicants.end(),
                    std::back_inserter(table),
-                   [](Implicant imp) { return std::make_pair(imp, false); });
+                   [](Implicant imp) { return MarkedImplicant(imp); });
 
     std::cerr << "\nMarked implicants:\n";
     for (auto [imp, removed] : table) {
@@ -131,25 +173,60 @@ int main(int argc, char** argv) {
     // index of start of this section (inclusive)
     size_t section_start = 0;
     while (done == false) {
+        // whether there's some terms reduced in this iteration
+        bool has_progress = false;
+
         // index of end of this section (non-inclusive)
         size_t section_end = table.size();
-        std::vector<size_t> part_start_indexes{};
 
-        std::optional<size_t> last_num_pos_lits = std::nullopt;
-        for (size_t i = section_start; i < section_end; i += 1) {
-            size_t num_pos_lits = table[i].first.num_pos_lits();
-
-            if (num_pos_lits != last_num_pos_lits) {
-                part_start_indexes.push_back(i);
-                last_num_pos_lits = num_pos_lits;
-            }
-        }
-
+        auto const part_start_indexes =
+            get_part_start_indexes(table, section_start, section_end);
         std::cerr << "\nPart start indexes:\n";
         dbg(part_start_indexes);
 
+        // run through each neighboring parts
+        for (size_t prev_part = 0; prev_part < part_start_indexes.size() - 1;
+             prev_part += 1) {
+            size_t next_part = prev_part + 1;
+            bool next_part_is_last = next_part == part_start_indexes.size() - 1;
+
+            size_t prev_part_start_index = part_start_indexes[prev_part];
+            size_t prev_part_end_index = part_start_indexes[prev_part + 1];
+            size_t next_part_start_index = part_start_indexes[next_part];
+            size_t next_part_end_index =
+                next_part_is_last ? section_end
+                                  : (part_start_indexes[next_part + 1]);
+
+            for (size_t i = prev_part_start_index; i < prev_part_end_index;
+                 i += 1) {
+                for (size_t j = next_part_start_index; j < next_part_end_index;
+                     j += 1) {
+                    if (auto imp = try_reduce(table[i].imp, table[j].imp)) {
+                        Implicant reduced_imp = *imp;
+
+                        // Reduced
+                        std::cerr << "Reducing " << table[i] << " and "
+                                  << table[j] << " into " << reduced_imp
+                                  << "\n";
+                        table.push_back(MarkedImplicant(reduced_imp));
+                        table[i].mark_reduced();
+                        table[j].mark_reduced();
+                        has_progress |= true;
+                    } else {
+                        // Not reduced
+                    }
+                }
+            }
+        }
+
+        // Update starting point of the next section
         section_start = section_end;
-        break;
+
+        // break if stall
+        if (has_progress == false) {
+            std::cerr << "No progress, breaking the loop\n";
+            break;
+        }
     }
 
     return 0;
