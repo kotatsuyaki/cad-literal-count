@@ -15,6 +15,7 @@
         dev-deps = with pkgs; [
           rnix-lsp
           bear
+          clang-tools
         ];
         cad = pkgs.stdenv.mkDerivation {
           name = "cad-pa-1";
