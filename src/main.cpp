@@ -1,3 +1,4 @@
+#include <algorithm>
 #include <array>
 #include <cassert>
 #include <fstream>
@@ -17,6 +18,8 @@ struct Implicant {
     Values values;
 
     Implicant(Values values) : values(values) {}
+
+    // Constructs a new 'Implicant'
     static Implicant read_from(std::istream& is, int nvars) {
         Values values{};
 
@@ -28,11 +31,11 @@ struct Implicant {
 
             char value;
             if (ch == '1') {
-                value = 1;
+                value = T;
             } else if (ch == '0') {
-                value = 0;
+                value = F;
             } else if (ch == '-') {
-                value = -1;
+                value = DC;
             } else {
                 assert(false);
             }
@@ -42,10 +45,10 @@ struct Implicant {
         return Implicant(values);
     }
 
-    void dbg_print() {
+    void dbg_print() const {
         std::cerr << "Implicant(";
         for (auto value : values) {
-            if (value == -1) {
+            if (value == DC) {
                 std::cerr << "-";
             } else {
                 std::cerr << static_cast<int>(value);
@@ -53,6 +56,20 @@ struct Implicant {
         }
         std::cerr << ")\n";
     }
+
+    // Returns the number of positive literals
+    size_t num_pos_lits() const {
+        return std::count_if(values.begin(), values.end(),
+                             [](char value) { return value == 1; });
+    }
+
+    // Defaults to soring by number of positive literals
+    bool operator<(const Implicant& imp) const {
+        return num_pos_lits() < imp.num_pos_lits();
+    }
+
+    // Defaults to comparing the underlying literal values
+    bool operator==(const Implicant& imp) const { return values == imp.values; }
 };
 
 int main(int argc, char** argv) {
@@ -76,10 +93,22 @@ int main(int argc, char** argv) {
         implicants.push_back(imp);
     }
 
-    std::cerr << "Implicants:\n";
+    std::cerr << "\nUnsorted implicants:\n";
     for (auto imp : implicants) {
         imp.dbg_print();
     }
+
+    // Sort initial implicants
+    std::sort(implicants.begin(), implicants.end());
+
+    std::cerr << "\nSorted implicants:\n";
+    for (auto imp : implicants) {
+        imp.dbg_print();
+    }
+
+    // TODO: find primary implicants
+    std::vector<std::vector<Implicant>> table;
+    table.push_back(implicants);
 
     return 0;
 }
