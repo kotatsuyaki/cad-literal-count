@@ -54,6 +54,26 @@ struct Implicant {
                              [](char value) { return value == 1; });
     }
 
+    // Returns the number of non-DC literals
+    size_t num_lits() const {
+        return std::count_if(values.begin(), values.end(),
+                             [](char value) { return value != DC; });
+    }
+
+    void print_raw(std::ostream& os) const {
+        for (auto value : values) {
+            if (value == T) {
+                os << "1";
+            } else if (value == F) {
+                os << "0";
+            } else if (value == DC) {
+                os << "-";
+            } else {
+                assert(false);
+            }
+        }
+    }
+
     // Defaults to soring by number of positive literals
     bool operator<(const Implicant& imp) const {
         return num_pos_lits() < imp.num_pos_lits();
@@ -273,6 +293,29 @@ int main(int argc, char** argv) {
     for (auto marked_imp : table) {
         if (marked_imp.reduced == false)
             dbg(marked_imp);
+    }
+
+    // Write output
+    std::ofstream outfile(argv[2]);
+
+    size_t prime_count = 0;
+    size_t lit_count = 0;
+    for (auto const& mimp : table) {
+        if (mimp.reduced) {
+            continue;
+        }
+        prime_count += 1;
+        lit_count += mimp.imp.num_lits();
+    }
+
+    outfile << lit_count << "\n";
+    outfile << prime_count << "\n";
+
+    for (auto const& mimp : table) {
+        if (mimp.reduced == false) {
+            mimp.imp.print_raw(outfile);
+            outfile << "\n";
+        }
     }
 
     return 0;
