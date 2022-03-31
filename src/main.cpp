@@ -64,7 +64,6 @@ int main(int argc, char** argv) {
         std::cerr << (removed ? "(X) " : "(O) ") << imp << "\n";
     }
 
-    // TODO: find primary implicants
     bool done = false;
     // index of start of this section (inclusive)
     size_t section_start = 0;
@@ -81,6 +80,9 @@ int main(int argc, char** argv) {
         dbg(part_start_indexes);
 
         // run through each neighboring parts
+        //
+        // NOTE: This part uses indexes instead of iterators because iterators
+        // are invalidated by 'push_back'
         for (size_t prev_part = 0; prev_part < part_start_indexes.size() - 1;
              prev_part += 1) {
             size_t next_part = prev_part + 1;
