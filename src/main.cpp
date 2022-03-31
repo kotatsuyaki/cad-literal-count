@@ -10,171 +10,12 @@
 #include <vector>
 
 #include "dbg.h"
+#include "implicant.hpp"
 
-// don't care
-#define T 1
-#define F 0
-#define DC -1
-
-struct Implicant {
-    using Values = std::vector<char>;
-    Values values;
-
-    Implicant(Values values) : values(values) {}
-
-    // Constructs a new 'Implicant'
-    static Implicant read_from(std::istream& is, int nvars) {
-        Values values{};
-
-        for (int i = 0; i < nvars; i += 1) {
-            char ch;
-            is >> ch;
-
-            std::cerr << "Read ch: " << ch << "\n";
-
-            char value;
-            if (ch == '1') {
-                value = T;
-            } else if (ch == '0') {
-                value = F;
-            } else if (ch == '-') {
-                value = DC;
-            } else {
-                assert(false);
-            }
-            values.push_back(value);
-        }
-
-        return Implicant(values);
-    }
-
-    // Returns the number of positive literals
-    size_t num_pos_lits() const {
-        return std::count_if(values.begin(), values.end(),
-                             [](char value) { return value == 1; });
-    }
-
-    // Returns the number of non-DC literals
-    size_t num_lits() const {
-        return std::count_if(values.begin(), values.end(),
-                             [](char value) { return value != DC; });
-    }
-
-    void print_raw(std::ostream& os) const {
-        for (auto value : values) {
-            if (value == T) {
-                os << "1";
-            } else if (value == F) {
-                os << "0";
-            } else if (value == DC) {
-                os << "-";
-            } else {
-                assert(false);
-            }
-        }
-    }
-
-    // Defaults to soring by number of positive literals
-    bool operator<(const Implicant& imp) const {
-        return num_pos_lits() < imp.num_pos_lits();
-    }
-
-    // Defaults to comparing the underlying literal values
-    bool operator==(const Implicant& imp) const { return values == imp.values; }
-
-    friend std::ostream& operator<<(std::ostream& os, const Implicant& imp);
-};
-
-struct MarkedImplicant {
-    Implicant imp;
-    bool reduced = false;
-    MarkedImplicant(Implicant imp) : imp(imp) {}
-    void mark_reduced() { reduced = true; }
-
-    // Compare the contained 'Implicant' and ignore reduced flag
-    bool operator<(const MarkedImplicant& mimp) const { return imp < mimp.imp; }
-
-    // Compare the contained 'Implicant' and ignore reduced flag
-    bool operator==(const MarkedImplicant& mimp) const {
-        return imp == mimp.imp;
-    }
-
-    friend std::ostream& operator<<(std::ostream& os,
-                                    const MarkedImplicant& mimp);
-};
-
-std::ostream& operator<<(std::ostream& os, const Implicant& imp) {
-    os << "Implicant(";
-    os << imp.num_pos_lits() << ", ";
-    for (auto value : imp.values) {
-        if (value == DC) {
-            os << "-";
-        } else {
-            os << static_cast<int>(value);
-        }
-    }
-    os << ")";
-    return os;
-}
-
-std::ostream& operator<<(std::ostream& os, const MarkedImplicant& mimp) {
-    os << "MarkedImplicant(";
-    os << (mimp.reduced ? "_, " : "O, ");
-    os << mimp.imp;
-    os << ")";
-    return os;
-}
-
-std::optional<Implicant> try_reduce(Implicant a, Implicant b) {
-    size_t nvars = a.values.size();
-    size_t num_diff = 0;
-    size_t diff_index = 0;
-
-    // Find number of different variables
-    for (size_t i = 0; i < nvars; i += 1) {
-        if (a.values[i] != b.values[i]) {
-            num_diff += 1;
-            diff_index = i;
-
-            // Early return if there's too many differences
-            if (num_diff > 1) {
-                return std::nullopt;
-            }
-        }
-    }
-
-    if (num_diff == 0) {
-        assert(false);
-    } else if (num_diff == 1) {
-        // Return new implicant with variable at the only one different place
-        // set as don't care
-        Implicant imp = a;
-        imp.values[diff_index] = DC;
-        return imp;
-    } else {
-        assert(false);
-    }
-}
-
-// Get starting indexes of each consecutive part of the table, by their pos lit
-// counts
+std::optional<Implicant> try_reduce(Implicant a, Implicant b);
 std::vector<size_t> get_part_start_indexes(std::vector<MarkedImplicant>& table,
                                            size_t section_start,
-                                           size_t section_end) {
-    std::vector<size_t> part_start_indexes{};
-
-    std::optional<size_t> last_num_pos_lits = std::nullopt;
-    for (size_t i = section_start; i < section_end; i += 1) {
-        size_t num_pos_lits = table[i].imp.num_pos_lits();
-
-        if (num_pos_lits != last_num_pos_lits) {
-            part_start_indexes.push_back(i);
-            last_num_pos_lits = num_pos_lits;
-        }
-    }
-
-    return part_start_indexes;
-}
+                                           size_t section_end);
 
 int main(int argc, char** argv) {
     assert(argc == 3);
@@ -267,8 +108,6 @@ int main(int argc, char** argv) {
                         table[i].mark_reduced();
                         table[j].mark_reduced();
                         has_progress |= true;
-                    } else {
-                        // Not reduced
                     }
                 }
             }
@@ -319,4 +158,56 @@ int main(int argc, char** argv) {
     }
 
     return 0;
+}
+
+// Try to reduce two implicants if they're only different in one bit
+std::optional<Implicant> try_reduce(Implicant a, Implicant b) {
+    size_t nvars = a.values.size();
+    size_t num_diff = 0;
+    size_t diff_index = 0;
+
+    // Find number of different variables
+    for (size_t i = 0; i < nvars; i += 1) {
+        if (a.values[i] != b.values[i]) {
+            num_diff += 1;
+            diff_index = i;
+
+            // Early return if there's too many differences
+            if (num_diff > 1) {
+                return std::nullopt;
+            }
+        }
+    }
+
+    if (num_diff == 0) {
+        assert(false);
+    } else if (num_diff == 1) {
+        // Return new implicant with variable at the only one different place
+        // set as don't care
+        Implicant imp = a;
+        imp.values[diff_index] = DC;
+        return imp;
+    } else {
+        assert(false);
+    }
+}
+
+// Get starting indexes of each consecutive part of the table, by their pos lit
+// counts
+std::vector<size_t> get_part_start_indexes(std::vector<MarkedImplicant>& table,
+                                           size_t section_start,
+                                           size_t section_end) {
+    std::vector<size_t> part_start_indexes{};
+
+    std::optional<size_t> last_num_pos_lits = std::nullopt;
+    for (size_t i = section_start; i < section_end; i += 1) {
+        size_t num_pos_lits = table[i].imp.num_pos_lits();
+
+        if (num_pos_lits != last_num_pos_lits) {
+            part_start_indexes.push_back(i);
+            last_num_pos_lits = num_pos_lits;
+        }
+    }
+
+    return part_start_indexes;
 }
