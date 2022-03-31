@@ -16,7 +16,8 @@ struct Implicant {
     using Values = std::vector<char>;
     Values values;
 
-    Implicant(Values values) : values(values) {}
+    inline Implicant(Values values) : values(values) {}
+    inline Implicant(Implicant const& rhs) : values(rhs.values) {}
 
     // Constructs a new 'Implicant'
     static Implicant read_from(std::istream& is, int nvars);
@@ -30,12 +31,14 @@ struct Implicant {
     void print_raw(std::ostream& os) const;
 
     // Defaults to soring by number of positive literals
-    bool operator<(const Implicant& imp) const {
+    inline bool operator<(const Implicant& imp) const {
         return num_pos_lits() < imp.num_pos_lits();
     }
 
     // Defaults to comparing the underlying literal values
-    bool operator==(const Implicant& imp) const { return values == imp.values; }
+    inline bool operator==(const Implicant& imp) const {
+        return values == imp.values;
+    }
 
     friend std::ostream& operator<<(std::ostream& os, const Implicant& imp);
 };
@@ -45,6 +48,8 @@ struct MarkedImplicant {
     bool reduced = false;
 
     inline MarkedImplicant(Implicant imp) : imp(imp) {}
+    inline MarkedImplicant(MarkedImplicant const& rhs)
+        : imp(rhs.imp), reduced(rhs.reduced) {}
 
     inline void mark_reduced() { reduced = true; }
 
