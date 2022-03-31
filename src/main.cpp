@@ -7,17 +7,24 @@
 #include <iterator>
 #include <optional>
 #include <ostream>
+#include <stdexcept>
+#include <unordered_set>
 #include <vector>
 
 #include "dbg.h"
 #include "implicant.hpp"
 
-std::optional<Implicant> try_reduce(Implicant a, Implicant b);
-std::vector<size_t> get_part_start_indexes(std::vector<MarkedImplicant>& table,
-                                           size_t section_start,
-                                           size_t section_end);
+using std::vector;
 
-template <typename I> void dbg_vector(std::vector<I> const& vec) {
+std::optional<Implicant> try_reduce(Implicant a, Implicant b);
+vector<size_t> get_part_start_indexes(vector<MarkedImplicant>& table,
+                                      size_t section_start, size_t section_end);
+std::tuple<vector<Implicant>, int, int> read_implicants(char const* filename);
+vector<Implicant> find_prime_implicants(vector<MarkedImplicant>& table);
+size_t literal_count_of(vector<Implicant>& imps);
+
+template <typename I> void dbg_vector(char const* msg, vector<I> const& vec) {
+    std::cerr << "\n" << msg << "\n";
     size_t i = 0;
     for (auto elem : vec) {
         std::cerr << i << ": " << elem << "\n";
@@ -28,47 +35,130 @@ template <typename I> void dbg_vector(std::vector<I> const& vec) {
 int main(int argc, char** argv) {
     assert(argc == 3);
 
-    std::ifstream infile(argv[1]);
+    auto [input_implicants, nvars, nterms] = read_implicants(argv[1]);
+    dbg_vector("Unsorted input_implicants:", input_implicants);
+
+    // Sort initial implicants
+    vector<Implicant> sorted_implicants{input_implicants};
+    std::sort(sorted_implicants.begin(), sorted_implicants.end());
+    dbg_vector("Sorted implicants:", sorted_implicants);
+
+    // Insert initial implicants into the table
+    // Implicants, along with marker of whether it's been reduced or not
+    vector<MarkedImplicant> table;
+    std::transform(sorted_implicants.begin(), sorted_implicants.end(),
+                   std::back_inserter(table),
+                   [](Implicant imp) { return MarkedImplicant(imp); });
+    dbg_vector("Marked implicants:", table);
+
+    std::cerr << "\nPrimary implicants in table:\n";
+    for (auto marked_imp : table) {
+        if (marked_imp.reduced == false)
+            dbg(marked_imp);
+    }
+
+    auto primes = find_prime_implicants(table);
+
+    // Write output
+    std::ofstream outfile(argv[2]);
+
+    outfile << literal_count_of(primes) << "\n";
+    outfile << primes.size() << "\n";
+
+    for (auto const& prime : primes) {
+        prime.print_raw(outfile);
+        outfile << "\n";
+    }
+
+    outfile.flush();
+    outfile.close();
+
+    return 0;
+}
+
+// Try to reduce two implicants if they're only different in one bit
+std::optional<Implicant> try_reduce(Implicant a, Implicant b) {
+    size_t nvars = a.values.size();
+    size_t num_diff = 0;
+    size_t diff_index = 0;
+
+    // Find number of different variables
+    for (size_t i = 0; i < nvars; i += 1) {
+        if (a.values[i] != b.values[i]) {
+            num_diff += 1;
+            diff_index = i;
+
+            // Early return if there's too many differences
+            if (num_diff > 1) {
+                return std::nullopt;
+            }
+        }
+    }
+
+    if (num_diff == 0) {
+        assert(false);
+    } else if (num_diff == 1) {
+        // Return new implicant with variable at the only one different place
+        // set as don't care
+        Implicant imp = a;
+        imp.values[diff_index] = DC;
+        return imp;
+    } else {
+        assert(false);
+    }
+}
+
+// Get starting indexes of each consecutive part of the table, by their pos lit
+// counts
+vector<size_t> get_part_start_indexes(vector<MarkedImplicant>& table,
+                                      size_t section_start,
+                                      size_t section_end) {
+    vector<size_t> part_start_indexes{};
+
+    std::optional<size_t> last_num_pos_lits = std::nullopt;
+    for (size_t i = section_start; i < section_end; i += 1) {
+        size_t num_pos_lits = table[i].imp.num_pos_lits();
+
+        if (num_pos_lits != last_num_pos_lits) {
+            part_start_indexes.push_back(i);
+            last_num_pos_lits = num_pos_lits;
+        }
+    }
+
+    return part_start_indexes;
+}
+
+std::tuple<vector<Implicant>, int, int> read_implicants(char const* filename) {
+    std::ifstream infile(filename);
+    vector<Implicant> implicants{};
 
     int nvars, nterms;
     if (!(infile >> nvars >> nterms)) {
-        std::cerr << "Failed to read nvars & nterms\n";
-        return 1;
+        throw std::runtime_error("Failed to read nvars and (or) nterms");
     }
 
-    std::cerr << "nvars  = " << nvars << "\n";
-    std::cerr << "nterms = " << nterms << "\n";
-
-    std::vector<Implicant> implicants{};
     for (int term = 0; term < nterms; term += 1) {
         auto imp = Implicant::read_from(infile, nvars);
         std::cerr << imp << "\n";
         implicants.push_back(imp);
     }
 
-    std::cerr << "\nUnsorted implicants:\n";
-    dbg_vector(implicants);
+    return {implicants, nvars, nterms};
+}
 
-    // Sort initial implicants
-    std::sort(implicants.begin(), implicants.end());
+size_t literal_count_of(vector<Implicant>& imps) {
+    size_t lits = 0;
+    for (auto imp : imps) {
+        lits += imp.num_lits();
+    }
+    return lits;
+}
 
-    std::cerr << "\nSorted implicants:\n";
-    dbg_vector(implicants);
-
-    // Implicants, along with marker of whether it's been reduced or not
-    std::vector<MarkedImplicant> table;
-
-    // Insert initial implicants into the table
-    std::transform(implicants.begin(), implicants.end(),
-                   std::back_inserter(table),
-                   [](Implicant imp) { return MarkedImplicant(imp); });
-
-    std::cerr << "\nMarked implicants:\n";
-    dbg_vector(table);
-
+vector<Implicant> find_prime_implicants(vector<MarkedImplicant>& table) {
     bool done = false;
     // index of start of this section (inclusive)
     size_t section_start = 0;
+
     while (done == false) {
         // whether there's some terms reduced in this iteration
         bool has_progress = false;
@@ -132,86 +222,12 @@ int main(int argc, char** argv) {
         }
     }
 
-    std::cerr << "\nPrimary implicants in table:\n";
-    for (auto marked_imp : table) {
-        if (marked_imp.reduced == false)
-            dbg(marked_imp);
-    }
-
-    // Write output
-    std::ofstream outfile(argv[2]);
-
-    size_t prime_count = 0;
-    size_t lit_count = 0;
-    for (auto const& mimp : table) {
+    vector<Implicant> primes{};
+    for (auto& mimp : table) {
         if (mimp.reduced) {
             continue;
         }
-        prime_count += 1;
-        lit_count += mimp.imp.num_lits();
+        primes.push_back(mimp.imp);
     }
 
-    outfile << lit_count << "\n";
-    outfile << prime_count << "\n";
-
-    for (auto const& mimp : table) {
-        if (mimp.reduced == false) {
-            mimp.imp.print_raw(outfile);
-            outfile << "\n";
-        }
-    }
-
-    return 0;
-}
-
-// Try to reduce two implicants if they're only different in one bit
-std::optional<Implicant> try_reduce(Implicant a, Implicant b) {
-    size_t nvars = a.values.size();
-    size_t num_diff = 0;
-    size_t diff_index = 0;
-
-    // Find number of different variables
-    for (size_t i = 0; i < nvars; i += 1) {
-        if (a.values[i] != b.values[i]) {
-            num_diff += 1;
-            diff_index = i;
-
-            // Early return if there's too many differences
-            if (num_diff > 1) {
-                return std::nullopt;
-            }
-        }
-    }
-
-    if (num_diff == 0) {
-        assert(false);
-    } else if (num_diff == 1) {
-        // Return new implicant with variable at the only one different place
-        // set as don't care
-        Implicant imp = a;
-        imp.values[diff_index] = DC;
-        return imp;
-    } else {
-        assert(false);
-    }
-}
-
-// Get starting indexes of each consecutive part of the table, by their pos lit
-// counts
-std::vector<size_t> get_part_start_indexes(std::vector<MarkedImplicant>& table,
-                                           size_t section_start,
-                                           size_t section_end) {
-    std::vector<size_t> part_start_indexes{};
-
-    std::optional<size_t> last_num_pos_lits = std::nullopt;
-    for (size_t i = section_start; i < section_end; i += 1) {
-        size_t num_pos_lits = table[i].imp.num_pos_lits();
-
-        if (num_pos_lits != last_num_pos_lits) {
-            part_start_indexes.push_back(i);
-            last_num_pos_lits = num_pos_lits;
-        }
-    }
-
-    return part_start_indexes;
-}
+    return primes;
