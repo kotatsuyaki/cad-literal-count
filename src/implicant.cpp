@@ -70,3 +70,10 @@ size_t Implicant::num_lits() const {
     return std::count_if(values.begin(), values.end(),
                          [](char value) { return value != DC; });
 }
+
+size_t ipow(size_t x, size_t p) {
+    size_t i = 1;
+    for (size_t j = 1; j <= p; j++)
+        i *= x;
+    return i;
+}

@@ -56,6 +56,12 @@ int main(int argc, char** argv) {
     auto primes = find_prime_implicants(table);
     dbg_vector("Prime implicants", primes);
 
+    std::unordered_set<size_t> onset;
+    for (auto& prime : primes) {
+        dbg(prime);
+        prime.for_each_covered([](size_t vertice) { dbg(vertice); });
+    }
+
     // Write output
     write_implicants(argv[2], primes);
 
