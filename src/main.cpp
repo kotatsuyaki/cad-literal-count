@@ -22,6 +22,7 @@ vector<size_t> get_part_start_indexes(vector<MarkedImplicant>& table,
 std::tuple<vector<Implicant>, int, int> read_implicants(char const* filename);
 vector<Implicant> find_prime_implicants(vector<MarkedImplicant>& table);
 size_t literal_count_of(vector<Implicant>& imps);
+void write_implicants(char const* filename, std::vector<Implicant> imps);
 
 template <typename I> void dbg_vector(char const* msg, vector<I> const& vec) {
     std::cerr << "\n" << msg << "\n";
@@ -56,18 +57,7 @@ int main(int argc, char** argv) {
     dbg_vector("Prime implicants", primes);
 
     // Write output
-    std::ofstream outfile(argv[2]);
-
-    outfile << literal_count_of(primes) << "\n";
-    outfile << primes.size() << "\n";
-
-    for (auto const& prime : primes) {
-        prime.print_raw(outfile);
-        outfile << "\n";
-    }
-
-    outfile.flush();
-    outfile.close();
+    write_implicants(argv[2], primes);
 
     return 0;
 }
@@ -230,4 +220,19 @@ vector<Implicant> find_prime_implicants(vector<MarkedImplicant>& table) {
     primes.erase(std::unique(primes.begin(), primes.end()), primes.end());
 
     return primes;
+}
+
+void write_implicants(char const* filename, std::vector<Implicant> imps) {
+    std::ofstream outfile(filename);
+
+    outfile << literal_count_of(imps) << "\n";
+    outfile << imps.size() << "\n";
+
+    for (auto const& prime : imps) {
+        prime.print_raw(outfile);
+        outfile << "\n";
+    }
+
+    outfile.flush();
+    outfile.close();
 }
