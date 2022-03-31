@@ -16,6 +16,7 @@
           rnix-lsp
           bear
           clang-tools
+          gdb
         ];
         cad = pkgs.stdenv.mkDerivation {
           name = "cad-pa-1";
