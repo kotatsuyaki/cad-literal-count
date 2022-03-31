@@ -31,8 +31,6 @@ Implicant Implicant::read_from(std::istream& is, int nvars) {
         char ch;
         is >> ch;
 
-        std::cerr << "Read ch: " << ch << "\n";
-
         char value;
         if (ch == '1') {
             value = T;
