@@ -32,7 +32,13 @@ struct Implicant {
 
     // Defaults to soring by number of positive literals
     inline bool operator<(const Implicant& imp) const {
-        return num_pos_lits() < imp.num_pos_lits();
+        size_t la = num_pos_lits();
+        size_t lb = imp.num_pos_lits();
+        if (la == lb) {
+            return values < imp.values;
+        } else {
+            return la < lb;
+        }
     }
 
     // Defaults to comparing the underlying literal values

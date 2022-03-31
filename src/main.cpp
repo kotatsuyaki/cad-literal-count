@@ -51,13 +51,9 @@ int main(int argc, char** argv) {
                    [](Implicant imp) { return MarkedImplicant(imp); });
     dbg_vector("Marked implicants:", table);
 
-    std::cerr << "\nPrimary implicants in table:\n";
-    for (auto marked_imp : table) {
-        if (marked_imp.reduced == false)
-            dbg(marked_imp);
-    }
-
+    // Find prime implicants
     auto primes = find_prime_implicants(table);
+    dbg_vector("Prime implicants", primes);
 
     // Write output
     std::ofstream outfile(argv[2]);
@@ -230,4 +226,8 @@ vector<Implicant> find_prime_implicants(vector<MarkedImplicant>& table) {
         primes.push_back(mimp.imp);
     }
 
+    std::sort(primes.begin(), primes.end());
+    primes.erase(std::unique(primes.begin(), primes.end()), primes.end());
+
     return primes;
+}
