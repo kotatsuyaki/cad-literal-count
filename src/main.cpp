@@ -17,6 +17,14 @@ std::vector<size_t> get_part_start_indexes(std::vector<MarkedImplicant>& table,
                                            size_t section_start,
                                            size_t section_end);
 
+template <typename I> void dbg_vector(std::vector<I> const& vec) {
+    size_t i = 0;
+    for (auto elem : vec) {
+        std::cerr << i << ": " << elem << "\n";
+        i += 1;
+    }
+}
+
 int main(int argc, char** argv) {
     assert(argc == 3);
 
@@ -39,17 +47,13 @@ int main(int argc, char** argv) {
     }
 
     std::cerr << "\nUnsorted implicants:\n";
-    for (auto imp : implicants) {
-        std::cerr << imp << "\n";
-    }
+    dbg_vector(implicants);
 
     // Sort initial implicants
     std::sort(implicants.begin(), implicants.end());
 
     std::cerr << "\nSorted implicants:\n";
-    for (auto imp : implicants) {
-        std::cerr << imp << "\n";
-    }
+    dbg_vector(implicants);
 
     // Implicants, along with marker of whether it's been reduced or not
     std::vector<MarkedImplicant> table;
@@ -60,9 +64,7 @@ int main(int argc, char** argv) {
                    [](Implicant imp) { return MarkedImplicant(imp); });
 
     std::cerr << "\nMarked implicants:\n";
-    for (auto [imp, removed] : table) {
-        std::cerr << (removed ? "(X) " : "(O) ") << imp << "\n";
-    }
+    dbg_vector(table);
 
     bool done = false;
     // index of start of this section (inclusive)
