@@ -125,12 +125,13 @@ int main(int argc, char** argv) {
     assert(prime_used.size() == primes.size());
     while (vertices.empty() == false) {
         std::optional<size_t> best_i;
-        size_t best_score = 0;
+        float best_score = 0.0f;
         for (size_t i = 0; i < primes.size(); i += 1) {
             if (prime_used[i]) {
                 continue;
             }
-            size_t score = itov[i].size();
+            float score = static_cast<float>(itov[i].size()) /
+                          static_cast<float>(primes[i].num_lits());
             if (score >= best_score) {
                 // pick primes[i]
                 best_i = i;
