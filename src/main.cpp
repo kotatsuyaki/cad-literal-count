@@ -23,6 +23,8 @@ vector<size_t> get_part_start_indexes(vector<MarkedImplicant>& table,
                                       size_t section_start, size_t section_end);
 std::tuple<vector<Implicant>, int, int> read_implicants(char const* filename);
 vector<Implicant> find_prime_implicants(vector<MarkedImplicant>& table);
+vector<Implicant> select_prime_implicants(vector<Implicant>& primes,
+                                          size_t nvars);
 size_t literal_count_of(vector<Implicant>& imps);
 void write_implicants(char const* filename, std::vector<Implicant> imps);
 
@@ -64,105 +66,8 @@ int main(int argc, char** argv) {
     auto primes = find_prime_implicants(table);
     dbg_vector("Prime implicants", primes);
 
-    // From now on, refer to primes by their indexes
-    std::unordered_set<size_t> onset;
-
-    // mappings between implicants and their covered covertices
-    vector<unordered_set<size_t>> itov{};
-    vector<unordered_set<size_t>> vtoi{};
-    itov.resize(primes.size());
-    vtoi.resize(ipow(2, nvars));
-
-    for (size_t i = 0; i < primes.size(); i += 1) {
-        auto const& prime = primes[i];
-        prime.for_each_covered([&itov, &vtoi, i](size_t vertice) {
-            itov[i].insert(vertice);
-            vtoi[vertice].insert(i);
-        });
-    }
-    dbg(itov, vtoi);
-
-    // find those vertices with only one coverer
-    vector<size_t> ess_prime_indexes{};
-    vector<size_t> ess_vertice_indexes{};
-    for (size_t j = 0; j < itov.size(); j += 1) {
-        if (vtoi[j].size() == 1) {
-            ess_prime_indexes.push_back(*vtoi[j].begin());
-            ess_vertice_indexes.push_back(j);
-        }
-    }
-
-    vector<Implicant> ess_primes{};
-
-    // delete prime entries from the back
-    // NOTE: this invalidates the 'itov' and 'vtoi' tables
-    sort_dedup_reverse(ess_prime_indexes);
-    for (size_t i : ess_prime_indexes) {
-        ess_primes.push_back(primes[i]);
-        primes.erase(primes.begin() + i);
-    }
-
-    ////////////
-    itov.clear();
-    itov.resize(primes.size());
-    vtoi.clear();
-    vtoi.resize(ipow(2, nvars));
-
-    // set of yet-to-be-covered vertices
-    unordered_set<size_t> vertices;
-
-    // re-construct itov and vtoi tables
-    for (size_t i = 0; i < primes.size(); i += 1) {
-        auto const& prime = primes[i];
-        prime.for_each_covered([&itov, &vtoi, &vertices, i](size_t vertice) {
-            itov[i].insert(vertice);
-            vertices.insert(vertice);
-            vtoi[vertice].insert(i);
-        });
-    }
-
-    vector<bool> prime_used(primes.size(), false);
-    assert(prime_used.size() == primes.size());
-    while (vertices.empty() == false) {
-        std::optional<size_t> best_i;
-        float best_score = 0.0f;
-        for (size_t i = 0; i < primes.size(); i += 1) {
-            if (prime_used[i]) {
-                continue;
-            }
-            float score = static_cast<float>(itov[i].size()) /
-                          static_cast<float>(primes[i].num_lits());
-            if (score >= best_score) {
-                // pick primes[i]
-                best_i = i;
-                best_score = score;
-            }
-        }
-
-        if (best_i.has_value()) {
-            // pick primes[i]
-            size_t i = best_i.value();
-            prime_used[i] = true;
-
-            for (size_t vertice : itov[i]) {
-                vertices.erase(vertice);
-                for (size_t impi : vtoi[vertice]) {
-                    if (impi != i) {
-                        itov[impi].erase(vertice);
-                    }
-                }
-            }
-        } else {
-            assert(false);
-        }
-    }
-
-    vector<Implicant> answers(ess_primes);
-    for (size_t i = 0; i < primes.size(); i += 1) {
-        if (prime_used[i]) {
-            answers.push_back(primes[i]);
-        }
-    }
+    // Select a subset of prime implicants that covers the on-set
+    auto answers = select_prime_implicants(primes, nvars);
 
     // Write output
     write_implicants(argv[2], answers);
@@ -343,4 +248,118 @@ void write_implicants(char const* filename, std::vector<Implicant> imps) {
 
     outfile.flush();
     outfile.close();
+}
+
+vector<Implicant> select_prime_implicants(vector<Implicant>& primes,
+                                          size_t nvars) {
+    // mappings between implicants and their covered covertices
+    vector<unordered_set<size_t>> itov{};
+    vector<unordered_set<size_t>> vtoi{};
+    itov.resize(primes.size());
+    vtoi.resize(ipow(2, nvars));
+
+    // construct tables
+    for (size_t i = 0; i < primes.size(); i += 1) {
+        auto const& prime = primes[i];
+        prime.for_each_covered([&itov, &vtoi, i](size_t vertice) {
+            itov[i].insert(vertice);
+            vtoi[vertice].insert(i);
+        });
+    }
+    dbg(itov, vtoi);
+
+    // find those vertices with only one coverer (i.e. essential prime
+    // implicants)
+    vector<size_t> ess_prime_indexes{};
+    vector<size_t> ess_vertice_indexes{};
+    for (size_t j = 0; j < itov.size(); j += 1) {
+        if (vtoi[j].size() == 1) {
+            ess_prime_indexes.push_back(*vtoi[j].begin());
+            ess_vertice_indexes.push_back(j);
+        }
+    }
+
+    vector<Implicant> ess_primes{};
+
+    // delete prime entries from the back
+    // NOTE: this invalidates the 'itov' and 'vtoi' tables
+    sort_dedup_reverse(ess_prime_indexes);
+    for (size_t i : ess_prime_indexes) {
+        ess_primes.push_back(primes[i]);
+        primes.erase(primes.begin() + i);
+    }
+
+    // Reset the already-invalidated tables
+    itov.clear();
+    itov.resize(primes.size());
+    vtoi.clear();
+    vtoi.resize(ipow(2, nvars));
+
+    // set of yet-to-be-covered vertices
+    unordered_set<size_t> vertices;
+
+    // re-construct itov and vtoi tables
+    for (size_t i = 0; i < primes.size(); i += 1) {
+        auto const& prime = primes[i];
+        prime.for_each_covered([&itov, &vtoi, &vertices, i](size_t vertice) {
+            itov[i].insert(vertice);
+            vertices.insert(vertice);
+            vtoi[vertice].insert(i);
+        });
+    }
+
+    vector<bool> prime_used(primes.size(), false);
+    assert(prime_used.size() == primes.size());
+
+    // loop until all vertices are covered
+    while (vertices.empty() == false) {
+        std::optional<size_t> best_i;
+        float best_score = 0.0f;
+
+        // find the best unused prime implicant
+        for (size_t i = 0; i < primes.size(); i += 1) {
+            if (prime_used[i]) {
+                continue;
+            }
+            float score = static_cast<float>(itov[i].size()) /
+                          static_cast<float>(primes[i].num_lits());
+            if (score >= best_score) {
+                // pick primes[i]
+                best_i = i;
+                best_score = score;
+            }
+        }
+
+        if (best_i.has_value()) {
+            // pick primes[i]
+            size_t i = best_i.value();
+            prime_used[i] = true;
+
+            // remove vertices covered by this prime implicant
+            // from the "covered sets" of other implicants
+            for (size_t vertice : itov[i]) {
+                vertices.erase(vertice);
+                for (size_t impi : vtoi[vertice]) {
+                    // NOTE: this check prevents itov[i] from being mutated
+                    // (which results in UB)
+                    if (impi != i) {
+                        itov[impi].erase(vertice);
+                    }
+                }
+            }
+        } else {
+            assert(false);
+        }
+    }
+
+    // include essential prime implicants and other selected prime implicants in
+    // the final answer
+    vector<Implicant> answers(ess_primes);
+    for (size_t i = 0; i < primes.size(); i += 1) {
+        if (prime_used[i]) {
+            answers.push_back(primes[i]);
+        }
+    }
+
+    return answers;
 }
