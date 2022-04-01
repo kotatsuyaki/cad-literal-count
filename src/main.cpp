@@ -5,6 +5,7 @@
 #include <iostream>
 #include <istream>
 #include <iterator>
+#include <limits>
 #include <optional>
 #include <ostream>
 #include <stdexcept>
@@ -14,6 +15,7 @@
 #include "dbg.h"
 #include "implicant.hpp"
 
+using std::unordered_set;
 using std::vector;
 
 std::optional<Implicant> try_reduce(Implicant a, Implicant b);
@@ -31,6 +33,12 @@ template <typename I> void dbg_vector(char const* msg, vector<I> const& vec) {
         std::cerr << i << ": " << elem << "\n";
         i += 1;
     }
+}
+
+template <typename I> void sort_dedup_reverse(vector<I>& vec) {
+    std::sort(vec.begin(), vec.end());
+    vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
+    std::reverse(vec.begin(), vec.end());
 }
 
 int main(int argc, char** argv) {
@@ -56,14 +64,107 @@ int main(int argc, char** argv) {
     auto primes = find_prime_implicants(table);
     dbg_vector("Prime implicants", primes);
 
+    // From now on, refer to primes by their indexes
     std::unordered_set<size_t> onset;
-    for (auto& prime : primes) {
-        dbg(prime);
-        prime.for_each_covered([](size_t vertice) { dbg(vertice); });
+
+    // mappings between implicants and their covered covertices
+    vector<unordered_set<size_t>> itov{};
+    vector<unordered_set<size_t>> vtoi{};
+    itov.resize(primes.size());
+    vtoi.resize(ipow(2, nvars));
+
+    for (size_t i = 0; i < primes.size(); i += 1) {
+        auto const& prime = primes[i];
+        prime.for_each_covered([&itov, &vtoi, i](size_t vertice) {
+            itov[i].insert(vertice);
+            vtoi[vertice].insert(i);
+        });
+    }
+    dbg(itov, vtoi);
+
+    // find those vertices with only one coverer
+    vector<size_t> ess_prime_indexes{};
+    vector<size_t> ess_vertice_indexes{};
+    for (size_t j = 0; j < itov.size(); j += 1) {
+        if (vtoi[j].size() == 1) {
+            ess_prime_indexes.push_back(*vtoi[j].begin());
+            ess_vertice_indexes.push_back(j);
+        }
+    }
+
+    vector<Implicant> ess_primes{};
+
+    // delete prime entries from the back
+    // NOTE: this invalidates the 'itov' and 'vtoi' tables
+    sort_dedup_reverse(ess_prime_indexes);
+    for (size_t i : ess_prime_indexes) {
+        ess_primes.push_back(primes[i]);
+        primes.erase(primes.begin() + i);
+    }
+
+    ////////////
+    itov.clear();
+    itov.resize(primes.size());
+    vtoi.clear();
+    vtoi.resize(ipow(2, nvars));
+
+    // set of yet-to-be-covered vertices
+    unordered_set<size_t> vertices;
+
+    // re-construct itov and vtoi tables
+    for (size_t i = 0; i < primes.size(); i += 1) {
+        auto const& prime = primes[i];
+        prime.for_each_covered([&itov, &vtoi, &vertices, i](size_t vertice) {
+            itov[i].insert(vertice);
+            vertices.insert(vertice);
+            vtoi[vertice].insert(i);
+        });
+    }
+
+    vector<bool> prime_used(primes.size(), false);
+    assert(prime_used.size() == primes.size());
+    while (vertices.empty() == false) {
+        std::optional<size_t> best_i;
+        size_t best_score = 0;
+        for (size_t i = 0; i < primes.size(); i += 1) {
+            if (prime_used[i]) {
+                continue;
+            }
+            size_t score = itov[i].size();
+            if (score >= best_score) {
+                // pick primes[i]
+                best_i = i;
+                best_score = score;
+            }
+        }
+
+        if (best_i.has_value()) {
+            // pick primes[i]
+            size_t i = best_i.value();
+            prime_used[i] = true;
+
+            for (size_t vertice : itov[i]) {
+                vertices.erase(vertice);
+                for (size_t impi : vtoi[vertice]) {
+                    if (impi != i) {
+                        itov[impi].erase(vertice);
+                    }
+                }
+            }
+        } else {
+            assert(false);
+        }
+    }
+
+    vector<Implicant> answers(ess_primes);
+    for (size_t i = 0; i < primes.size(); i += 1) {
+        if (prime_used[i]) {
+            answers.push_back(primes[i]);
+        }
     }
 
     // Write output
-    write_implicants(argv[2], primes);
+    write_implicants(argv[2], answers);
 
     return 0;
 }

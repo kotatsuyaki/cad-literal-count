@@ -46,7 +46,7 @@ struct Implicant {
     bool covers_vertice(size_t vertice) const;
 
     // Get all vertices covered by the implicant
-    template <typename C> void for_each_covered(C callback) {
+    template <typename C> void for_each_covered(C callback) const {
         // indexes of DCs
         std::vector<size_t> dcs{};
         size_t base = 0;
