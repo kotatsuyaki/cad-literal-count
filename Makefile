@@ -1,7 +1,7 @@
 .POSIX:
 
 RM ?= rm
-CXX ?= g++
+CXX ?= /opt/rh/devtoolset-7/root/usr/bin/g++
 CXXFLAGS ?= -O3 -g -Wall -std=c++17
 
 TARGET ?= pa1
