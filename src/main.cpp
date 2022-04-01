@@ -230,7 +230,7 @@ void write_implicants(char const* filename, std::vector<Implicant> imps) {
     outfile << lits << "\n";
     outfile << imps.size() << "\n";
 
-    std::cerr << lits << " lits, " << imps.size() << " imps";
+    std::cerr << lits << " lits, " << imps.size() << " imps\n";
 
     for (auto const& prime : imps) {
         prime.print_raw(outfile);
