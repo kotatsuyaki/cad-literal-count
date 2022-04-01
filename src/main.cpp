@@ -322,6 +322,13 @@ vector<Implicant> select_prime_implicants(vector<Implicant>& primes,
             }
             float score = static_cast<float>(itov[i].size()) /
                           static_cast<float>(primes[i].num_lits());
+            // boost scores for newly-created essential prime implicants
+            bool emergent =
+                std::any_of(itov[i].begin(), itov[i].end(),
+                            [&vtoi](size_t v) { return vtoi[v].size() == 1; });
+            if (emergent) {
+                score *= 10000000.0;
+            }
             if (score >= best_score) {
                 // pick primes[i]
                 best_i = i;
