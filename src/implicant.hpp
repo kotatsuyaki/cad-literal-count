@@ -28,6 +28,9 @@ struct Implicant {
     // Constructs a new 'Implicant'
     static Implicant read_from(std::istream& is, int nvars);
 
+    // Construct a new 'Implicant' containing a single vertice
+    static Implicant from_vertice(size_t nvars, size_t vertice);
+
     // Returns the number of positive literals
     size_t num_pos_lits() const;
 
@@ -74,6 +77,8 @@ struct Implicant {
             callback(vertice);
         }
     }
+
+    inline size_t nvars() const { return values.size(); }
 
     // Defaults to soring by number of positive literals
     inline bool operator<(const Implicant& imp) const {

@@ -1,5 +1,7 @@
 #include "implicant.hpp"
 
+#define NTHBIT(NUM, N) ((NUM >> N) & 1)
+
 // print 'Implicant'
 std::ostream& operator<<(std::ostream& os, const Implicant& imp) {
     os << "Implicant(";
@@ -42,6 +44,18 @@ Implicant Implicant::read_from(std::istream& is, int nvars) {
             assert(false);
         }
         values.push_back(value);
+    }
+
+    return Implicant(values);
+}
+
+Implicant Implicant::from_vertice(size_t nvars, size_t vertice) {
+    Values values{};
+    values.resize(nvars);
+    assert(values.size() == nvars);
+
+    for (size_t i = 0; i < nvars; i += 1) {
+        values[i] = NTHBIT(vertice, i);
     }
 
     return Implicant(values);
