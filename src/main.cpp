@@ -12,7 +12,6 @@
 #include <unordered_set>
 #include <vector>
 
-#include "dbg.h"
 #include "implicant.hpp"
 
 using std::unordered_set;
@@ -28,15 +27,6 @@ vector<Implicant> select_prime_implicants(vector<Implicant>& primes,
 size_t literal_count_of(vector<Implicant>& imps);
 void write_implicants(char const* filename, std::vector<Implicant> imps);
 
-template <typename I> void dbg_vector(char const* msg, vector<I> const& vec) {
-    std::cerr << "\n" << msg << "\n";
-    size_t i = 0;
-    for (auto elem : vec) {
-        std::cerr << i << ": " << elem << "\n";
-        i += 1;
-    }
-}
-
 template <typename I> void sort_dedup_reverse(vector<I>& vec) {
     std::sort(vec.begin(), vec.end());
     vec.erase(std::unique(vec.begin(), vec.end()), vec.end());
@@ -46,30 +36,32 @@ template <typename I> void sort_dedup_reverse(vector<I>& vec) {
 int main(int argc, char** argv) {
     assert(argc == 3);
 
+    std::cerr << "Reading implicants\n";
     auto [input_implicants, nvars, nterms] = read_implicants(argv[1]);
-    dbg_vector("Unsorted input_implicants:", input_implicants);
 
     // Sort initial implicants
     vector<Implicant> sorted_implicants{input_implicants};
     std::sort(sorted_implicants.begin(), sorted_implicants.end());
-    dbg_vector("Sorted implicants:", sorted_implicants);
 
     // Insert initial implicants into the table
     // Implicants, along with marker of whether it's been reduced or not
+    std::cerr << "Constructing initial QM table\n";
     vector<MarkedImplicant> table;
     std::transform(sorted_implicants.begin(), sorted_implicants.end(),
                    std::back_inserter(table),
                    [](Implicant imp) { return MarkedImplicant(imp); });
-    dbg_vector("Marked implicants:", table);
 
     // Find prime implicants
+    std::cerr << "Finding prime implicants\n";
     auto primes = find_prime_implicants(table);
-    dbg_vector("Prime implicants", primes);
 
     // Select a subset of prime implicants that covers the on-set
+    std::cerr << "Selecting prime implicants out of " << primes.size()
+              << " of them\n";
     auto answers = select_prime_implicants(primes, nvars);
 
     // Write output
+    std::cerr << "Writing output\n";
     write_implicants(argv[2], answers);
 
     return 0;
@@ -138,7 +130,6 @@ std::tuple<vector<Implicant>, int, int> read_implicants(char const* filename) {
 
     for (int term = 0; term < nterms; term += 1) {
         auto imp = Implicant::read_from(infile, nvars);
-        std::cerr << imp << "\n";
         implicants.push_back(imp);
     }
 
@@ -159,6 +150,8 @@ vector<Implicant> find_prime_implicants(vector<MarkedImplicant>& table) {
     size_t section_start = 0;
 
     while (done == false) {
+        std::cerr << "QM iteration with table size " << table.size() << "\n";
+
         // whether there's some terms reduced in this iteration
         bool has_progress = false;
 
@@ -167,8 +160,6 @@ vector<Implicant> find_prime_implicants(vector<MarkedImplicant>& table) {
 
         auto const part_start_indexes =
             get_part_start_indexes(table, section_start, section_end);
-        std::cerr << "\nPart start indexes:\n";
-        dbg(part_start_indexes);
 
         // run through each neighboring parts
         //
@@ -194,9 +185,6 @@ vector<Implicant> find_prime_implicants(vector<MarkedImplicant>& table) {
                         Implicant reduced_imp = *imp;
 
                         // Reduced
-                        std::cerr << "Reducing " << table[i] << " and "
-                                  << table[j] << " into " << reduced_imp
-                                  << "\n";
                         table.push_back(MarkedImplicant(reduced_imp));
                         table[i].mark_reduced();
                         table[j].mark_reduced();
@@ -238,8 +226,11 @@ vector<Implicant> find_prime_implicants(vector<MarkedImplicant>& table) {
 void write_implicants(char const* filename, std::vector<Implicant> imps) {
     std::ofstream outfile(filename);
 
-    outfile << literal_count_of(imps) << "\n";
+    size_t lits = literal_count_of(imps);
+    outfile << lits << "\n";
     outfile << imps.size() << "\n";
+
+    std::cerr << lits << " lits, " << imps.size() << " imps";
 
     for (auto const& prime : imps) {
         prime.print_raw(outfile);
@@ -259,6 +250,7 @@ vector<Implicant> select_prime_implicants(vector<Implicant>& primes,
     vtoi.resize(ipow(2, nvars));
 
     // construct tables
+    std::cerr << "Building I-V table\n";
     for (size_t i = 0; i < primes.size(); i += 1) {
         auto const& prime = primes[i];
         prime.for_each_covered([&itov, &vtoi, i](size_t vertice) {
@@ -266,10 +258,10 @@ vector<Implicant> select_prime_implicants(vector<Implicant>& primes,
             vtoi[vertice].insert(i);
         });
     }
-    dbg(itov, vtoi);
 
     // find those vertices with only one coverer (i.e. essential prime
     // implicants)
+    std::cerr << "Finding essential prime implicants\n";
     vector<size_t> ess_prime_indexes{};
     vector<size_t> ess_vertice_indexes{};
     for (size_t j = 0; j < itov.size(); j += 1) {
@@ -289,7 +281,12 @@ vector<Implicant> select_prime_implicants(vector<Implicant>& primes,
         primes.erase(primes.begin() + i);
     }
 
+    std::cerr << "Found " << ess_primes.size()
+              << " essential prime implicants\n";
+
     // Reset the already-invalidated tables
+    std::cerr << "Rebuilding I-V table with " << primes.size()
+              << " remaining prime implicants\n";
     itov.clear();
     itov.resize(primes.size());
     vtoi.clear();
@@ -313,6 +310,8 @@ vector<Implicant> select_prime_implicants(vector<Implicant>& primes,
 
     // loop until all vertices are covered
     while (vertices.empty() == false) {
+        std::cerr << "Finding next best implicant to include\n";
+
         std::optional<size_t> best_i;
         float best_score = 0.0f;
 
@@ -354,6 +353,7 @@ vector<Implicant> select_prime_implicants(vector<Implicant>& primes,
 
     // include essential prime implicants and other selected prime implicants in
     // the final answer
+    std::cerr << "Collecting answers\n";
     vector<Implicant> answers(ess_primes);
     for (size_t i = 0; i < primes.size(); i += 1) {
         if (prime_used[i]) {
